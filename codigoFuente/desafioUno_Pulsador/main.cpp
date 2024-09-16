@@ -2,40 +2,57 @@
 // C++ code
 
 
-float** obtenerDatos() {
-    const int NUM_COLUMNAS = 2;
-    int numDatos = 0;
-    float valor;
-    unsigned long tiempoInicio = millis();
-    unsigned long tiempoActual;
+const int pinAnalogico = A0;
+const unsigned long intervaloCaptura = 5;
+const unsigned long duracionCaptura = 5000;
 
-    float** matriz = new float*[1];
-
-    while (true) {
-        tiempoActual = millis();
-        if (tiempoActual - tiempoInicio > 5000) {
-            break;
-        }
-
-        if (numDatos % 1 == 0) {
-            matriz = (float**)realloc(matriz, (numDatos + 1) * sizeof(float*));
-            matriz[numDatos] = new float[NUM_COLUMNAS];
-        }
-
-        valor = analogRead(A0) * (5.0 / 1023.0);
-        matriz[numDatos][0] = (tiempoActual - tiempoInicio) / 1000.0;
-        matriz[numDatos][1] = valor;
-
-        numDatos++;
-    }
-
-    return matriz;
-}
+float amplitud;
+float frecuencia;
 
 void setup() {
     Serial.begin(9600);
-    float** datos = obtenerDatos();
 }
 
-void loop(){
+void loop() {
+    capturarAmplitudFrecuencia();
+
+    Serial.print("Amplitud: ");
+    Serial.print(amplitud);
+    Serial.print(" V, Frecuencia: ");
+    Serial.print(frecuencia);
+    Serial.println(" Hz");
+
+    delay(1000);
+}
+
+void capturarAmplitudFrecuencia() {
+    unsigned long tiempoInicio = millis();
+    int valorMax = 0;
+    int valorMin = 1023;
+    int ciclosCompletos = 0;
+    int valorAnterior = analogRead(pinAnalogico);
+    int umbral = 512;
+    int histeresis = 10;
+
+    while (millis() - tiempoInicio < duracionCaptura) {
+        int valorActual = analogRead(pinAnalogico);
+        if (valorActual > valorMax) valorMax = valorActual;
+        if (valorActual < valorMin) valorMin = valorActual;
+
+        if ((valorActual > umbral + histeresis && valorAnterior <= umbral + histeresis) ||
+            (valorActual < umbral - histeresis && valorAnterior >= umbral - histeresis)) {
+            ciclosCompletos++;
+        }
+
+        valorAnterior = valorActual;
+        delay(intervaloCaptura);
+    }
+
+    amplitud = (valorMax - valorMin) * (5.0 / 1023.0);
+    float tiempoTotal = duracionCaptura / 1000.0;
+    if (tiempoTotal > 0) {
+        frecuencia = (float)ciclosCompletos * 1000.0 / (2.0 * intervaloCaptura * tiempoTotal);
+    } else {
+        frecuencia = 0.0;
+    }
 }
