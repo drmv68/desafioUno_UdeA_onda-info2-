@@ -6,6 +6,9 @@ const unsigned long duracionCaptura = 2000;
 const int numSamples = 500;
 int samples[numSamples];
 
+const int botonIniciar = 23;
+const int botonImprimir = 27;
+
 float calcularAmplitud(int pinAnalogico, unsigned long duracionCaptura, int intervaloCaptura);
 float calcularFrecuencia(int pinAnalogico, unsigned long duracionCaptura, int intervaloCaptura);
 String identificarSenal(int datos[], int longitud);
@@ -15,27 +18,65 @@ int contarPico(int datos[], int longitud);
 
 void setup() {
     Serial.begin(9600);
-    delay(2000);
+    pinMode(botonIniciar, INPUT_PULLUP);
+    pinMode(botonImprimir, INPUT_PULLUP);
 }
 
 void loop() {
-    float amplitud = calcularAmplitud(pinAnalogico, duracionCaptura, intervaloCaptura);
-    float frecuencia = calcularFrecuencia(pinAnalogico, duracionCaptura, intervaloCaptura);
+    static bool capturando = false;       // Controla el estado de la captura
+    static bool datosCapturados = false;  // Indica si ya se capturaron los datos
+    static bool botonIniciarPresionado = false;  // Control para evitar múltiples lecturas del botón
+    static bool botonImprimirPresionado = false; // Control para evitar múltiples impresiones
 
-    Serial.print("Amplitud: ");
-    Serial.print(amplitud);
-    Serial.print(" V, Frecuencia: ");
-    Serial.print(frecuencia);
-    Serial.println(" Hz");
+    float amplitud = 0, frecuencia = 0;
 
-    for (int i = 0; i < numSamples; i++) {
-        samples[i] = analogRead(pinAnalogico);
+    // Verificar si se ha presionado el botón de inicio (para comenzar la captura de datos)
+    if (digitalRead(botonIniciar) == LOW && !botonIniciarPresionado) {
+        botonIniciarPresionado = true;
+        capturando = true;
+        datosCapturados = false;  // Reiniciar el estado de los datos
     }
 
-    String tipoSenal = identificarSenal(samples, numSamples);
-    Serial.println("Tipo de señal: " + tipoSenal);
+    // Si el botón de inicio ya no está presionado, restablecer el control
+    if (digitalRead(botonIniciar) == HIGH) {
+        botonIniciarPresionado = false;
+    }
 
-    delay(5000);
+    // Capturar los datos una sola vez
+    if (capturando && !datosCapturados) {
+        amplitud = calcularAmplitud(pinAnalogico, duracionCaptura, intervaloCaptura);
+        frecuencia = calcularFrecuencia(pinAnalogico, duracionCaptura, intervaloCaptura);
+
+        for (int i = 0; i < numSamples; i++) {
+            samples[i] = analogRead(pinAnalogico);  // Captura los datos
+        }
+
+        datosCapturados = true;  // Indica que los datos ya fueron capturados
+        capturando = false;  // Termina la captura
+    }
+
+    // Verificar si se ha presionado el botón de imprimir (para mostrar los datos capturados)
+    if (digitalRead(botonImprimir) == LOW && datosCapturados && !botonImprimirPresionado) {
+        botonImprimirPresionado = true;
+
+        Serial.print("Amplitud: ");
+        Serial.print(amplitud);
+        Serial.print(" V, Frecuencia: ");
+        Serial.print(frecuencia);
+        Serial.println(" Hz");
+
+        String tipoSenal = identificarSenal(samples, numSamples);
+        Serial.println("Tipo de señal: " + tipoSenal);
+
+        delay(500);  // Evitar múltiples impresiones continuas
+    }
+
+    // Si el botón de imprimir ya no está presionado, restablecer el control
+    if (digitalRead(botonImprimir) == HIGH) {
+        botonImprimirPresionado = false;
+    }
+
+    delay(100);  // Control de bucle para evitar lecturas continuas rápidas
 }
 
 float calcularAmplitud(int pinAnalogico, unsigned long duracionCaptura, int intervaloCaptura) {
