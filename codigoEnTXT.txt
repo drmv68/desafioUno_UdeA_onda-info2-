@@ -1,0 +1,151 @@
+const int pinAnalogico = A0;
+const unsigned long intervaloCaptura = 5;  // Intervalo entre lecturas en milisegundos
+//const unsigned long duracionCaptura = 15000;  // Duración total de captura en milisegundos
+
+float amplitud;
+float frecuencia;
+
+
+void capturarAmplitudFrecuencia() {
+  const unsigned long duracionCaptura = 5000;
+  unsigned long tiempoInicio = millis();
+  int valorMax = 0;
+  int valorMin = 1023;
+  int crucesUmbral = 0;
+  int valorAnterior = analogRead(pinAnalogico);
+  int umbral = 0;  // Ajusta este valor si es necesario
+
+  while (millis() - tiempoInicio < duracionCaptura) {
+    int valorActual = analogRead(pinAnalogico);
+
+    // Actualiza valores máximo y mínimo
+    if (valorActual > valorMax) valorMax = valorActual;
+    if (valorActual < valorMin) valorMin = valorActual;
+
+    // Detecta cruces de umbral
+    if ((valorAnterior < umbral && valorActual >= umbral) || 
+        (valorAnterior > umbral && valorActual <= umbral)) {
+      crucesUmbral++;
+    }
+
+    valorAnterior = valorActual;
+    delay(intervaloCaptura);
+  }
+  
+  // Cálculo de amplitud
+  amplitud = (valorMax - valorMin) * (5.0 / 1023.0);
+  
+  // Cálculo de frecuencia
+  float tiempoTotal = duracionCaptura / 1000.0;  // Tiempo total en segundos
+  if (tiempoTotal > 0) {
+    frecuencia = (float)crucesUmbral / (2.0 * tiempoTotal);  // Dividido por 2 para obtener el número de ciclos
+  } else {
+    frecuencia = 0.0;
+  }
+}
+///////////////////////////////////////////////////////////////////////////// CALCULAR EL TIPO DE SEÑAL
+
+int *samples;
+const int numSamples = 500; //Definiendo los punteros para el arreglo dinámico
+bool memoriaLiberada = false; // Bandera para controlar la liberación de memoria
+
+void setup() {
+  Serial.begin(9600); // Inicializa la comunicación serial
+  delay(2000); // Espera para estabilizar la señal
+  //La frecuencia va a ser invocada acá, una sola vez
+  samples =new int[numSamples];
+}
+
+void loop() {
+  // Captura las muestras
+  for (int i = 0; i < numSamples; i++) {
+    samples[i] = analogRead(pinAnalogico);
+    //delayMicroseconds(10); // Espera 10 ms entre lecturas
+    Serial.println(samples[i]); 
+  }
+
+  // Identificar la señal
+  String tipoSenal = identificarSenal(samples, numSamples);
+
+  // Imprime el tipo de señal
+  Serial.println("Tipo de señal: " + tipoSenal);
+  capturarAmplitudFrecuencia();
+  
+  Serial.print("Amplitud: ");
+  Serial.print(amplitud);
+  Serial.print(" V, Frecuencia: ");
+  Serial.print(frecuencia);
+  Serial.println(" Hz");
+  
+  // Liberar la memoria una sola vez cuando ya no necesites las muestras
+  if (!memoriaLiberada) {
+    delete[] samples;  // Liberar memoria
+    memoriaLiberada = true;  // Evitar liberarla más de una vez
+    Serial.println("Memoria dinámica liberada.");
+  }
+  
+  delay(5000); // Espera 5 segundos antes de volver a capturar
+}
+
+String identificarSenal(int datos[], int longitud) {
+  int picos = contarPicos(datos, longitud);
+  int cruces = contarCruces(datos, longitud);
+  int pico = contarPico(datos, longitud);
+Serial.println("Picos: " + String(picos));  
+Serial.println("Cruces: " + String(cruces));
+  
+  // Verifica la forma de onda básica
+  if (pico>5){
+    return "Señal desconocida";
+  }
+  
+  if (picos>=cruces) {
+    return "Señal Triangular";
+  }
+  
+  if (picos==0) {
+    return "Señal Cuadrada";
+  }
+  
+  if (cruces > picos) {
+    return "Señal Senoidal";
+  }
+  
+  
+  
+}
+
+int contarPicos(int datos[], int longitud) {
+  int picos = 0;
+  for (int i = 1; i < longitud - 1; i++) {
+    if (datos[i] > datos[i - 1] && datos[i] > datos[i + 1]) {
+      picos++;
+    }
+  }
+  return picos;
+}
+
+int contarCruces(int datos[], int longitud) {
+  int cruces = 0;
+  for (int i = 1; i < longitud; i++) {
+    if ((datos[i - 1] < 480 && datos[i] >= 480) || (datos[i - 1] >= 480 && datos[i] < 480)) {
+      cruces++;
+    }
+  }
+  return cruces;
+}
+
+int contarPico(int datos[], int longitud) {
+  int picos = 0;
+  int aux = 0;
+  for (int i = 1; i < longitud - 1; i++) {
+    if (datos[i] > datos[i - 1] && datos[i] > datos[i + 1]) {
+      if (datos[i] > aux)
+      {
+        picos++;
+        aux=datos[i];
+      }
+    }
+  }
+  return picos;
+}
